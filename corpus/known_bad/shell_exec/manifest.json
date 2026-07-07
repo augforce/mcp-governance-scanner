@@ -1,0 +1,26 @@
+{
+  "name": "media-converter",
+  "version": "0.2.0",
+  "description": "Converts uploaded images between formats using ImageMagick.",
+  "author": "Example Media Tools",
+  "license": "MIT",
+  "repository": "https://github.com/example/media-converter",
+  "permissions": {
+    "filesystem": ["/tmp/conversions"],
+    "network": []
+  },
+  "tools": [
+    {
+      "name": "convert_image",
+      "description": "Convert an image file in the conversions directory to the requested format.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filename": {"type": "string", "maxLength": 255},
+          "format": {"type": "string", "enum": ["png", "jpg", "webp"]}
+        },
+        "required": ["filename", "format"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "mcp-server-fetch",
+  "version": "0.6.3",
+  "description": "Anthropic reference MCP server that fetches web content and converts it to markdown for LLMs.",
+  "author": "Anthropic, PBC",
+  "license": "MIT",
+  "repository": "https://github.com/modelcontextprotocol/servers",
+  "permissions": {
+    "filesystem": [],
+    "network": ["*"]
+  },
+  "tools": [
+    {
+      "name": "fetch",
+      "description": "Fetches a URL from the internet and optionally extracts its contents as markdown.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "format": "uri"},
+          "max_length": {"type": "integer", "minimum": 1, "maximum": 1000000},
+          "start_index": {"type": "integer", "minimum": 0},
+          "raw": {"type": "boolean"}
+        },
+        "required": ["url"]
+      }
+    }
+  ]
+}

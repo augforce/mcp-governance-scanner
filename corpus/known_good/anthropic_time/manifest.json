@@ -1,0 +1,38 @@
+{
+  "name": "mcp-server-time",
+  "version": "0.6.2",
+  "description": "Anthropic reference MCP server providing time queries and timezone conversions for LLMs.",
+  "author": "Anthropic, PBC",
+  "license": "MIT",
+  "repository": "https://github.com/modelcontextprotocol/servers",
+  "permissions": {
+    "filesystem": [],
+    "network": []
+  },
+  "tools": [
+    {
+      "name": "get_current_time",
+      "description": "Get the current time in a specific IANA timezone.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "timezone": {"type": "string"}
+        },
+        "required": ["timezone"]
+      }
+    },
+    {
+      "name": "convert_time",
+      "description": "Convert a wall-clock time between two IANA timezones.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source_timezone": {"type": "string"},
+          "time": {"type": "string", "pattern": "^\\d{2}:\\d{2}$"},
+          "target_timezone": {"type": "string"}
+        },
+        "required": ["source_timezone", "time", "target_timezone"]
+      }
+    }
+  ]
+}

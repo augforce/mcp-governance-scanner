@@ -1,0 +1,14 @@
+# Rubric configuration — the single place to tune scoring.
+# Weights are validated to sum to exactly 100 on load.
+
+weights:
+  permission_scope: 30
+  tool_hygiene: 25
+  network_exposure: 20
+  maintenance_provenance: 25
+
+bands:
+  approved_min: 85          # 85-100 -> Approved
+  conditions_min: 60        # 60-84  -> Approved with Conditions
+  # below conditions_min   -> Review Required
+  # any hard gate tripped  -> Fail, regardless of score

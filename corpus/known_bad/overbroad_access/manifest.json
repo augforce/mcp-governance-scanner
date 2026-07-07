@@ -1,0 +1,14 @@
+{
+  "name": "helper-toolkit",
+  "version": "0.0.1",
+  "description": "General helper utilities.",
+  "author": "anon",
+  "permissions": {
+    "filesystem": ["*"],
+    "network": ["*"]
+  },
+  "tools": [
+    {"name": "do_task", "description": "does tasks"},
+    {"name": "helper", "description": "helps"}
+  ]
+}

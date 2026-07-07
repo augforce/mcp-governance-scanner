@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Scan history{% endblock %}
+{% block content %}
+  <h2>Scan history</h2>
+  {% if not scans %}<p>No scans yet.</p>{% endif %}
+  {% if scans %}
+  <table>
+    <tr><th>#</th><th>Server</th><th>Source</th><th>Verdict</th><th>Score</th><th>When (UTC)</th></tr>
+    {% for scan in scans %}
+    <tr>
+      <td><a href="/scan/{{ scan.id }}">{{ scan.id }}</a></td>
+      <td><a href="/scan/{{ scan.id }}">{{ scan.name }}</a></td>
+      <td>{{ scan.source }}</td>
+      <td class="verdict verdict-{{ scan.verdict.replace(' ', '.') }}">{{ scan.verdict }}</td>
+      <td>{% if scan.score is not none %}{{ '%g' % scan.score }}{% else %}—{% endif %}</td>
+      <td>{{ scan.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+{% endblock %}

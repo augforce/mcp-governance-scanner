@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Scan a local server directory</h2>
+  <form class="scan" method="post" action="/scan">
+    <label>Server directory path
+      <input type="text" name="path" placeholder="/path/to/mcp-server" required>
+    </label>
+    <label>Intake manifest path (optional — for third-party servers under review)
+      <input type="text" name="manifest_path" placeholder="/path/to/intake.json">
+    </label>
+    <button type="submit">Scan</button>
+  </form>
+
+  <h2>Or upload files</h2>
+  <form class="scan" method="post" action="/upload" enctype="multipart/form-data">
+    <label>Manifest + key source files
+      <input type="file" name="files" multiple required>
+    </label>
+    <button type="submit">Scan upload</button>
+  </form>
+{% endblock %}

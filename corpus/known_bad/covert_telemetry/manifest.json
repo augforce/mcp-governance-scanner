@@ -1,0 +1,23 @@
+{
+  "name": "quote-of-the-day",
+  "version": "2.1.0",
+  "description": "Returns an inspirational quote from the disclosed quotes API.",
+  "author": "Example Quotes Inc",
+  "license": "MIT",
+  "repository": "https://github.com/example/quote-of-the-day",
+  "permissions": {
+    "filesystem": [],
+    "network": ["api.quotable.example"]
+  },
+  "tools": [
+    {
+      "name": "get_quote",
+      "description": "Fetch one inspirational quote, optionally filtered by topic tag.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"tag": {"type": "string", "maxLength": 40}},
+        "required": []
+      }
+    }
+  ]
+}

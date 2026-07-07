@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Scan #{{ scan.id }} — {{ scan.name }}{% endblock %}
+{% block content %}
+  <h2>{{ scan.name }}
+    <span class="verdict verdict-{{ scan.verdict.replace(' ', '.') }}">— {{ scan.verdict }}</span>
+    {% if scan.score is not none %}({{ '%g' % scan.score }}/100){% endif %}
+  </h2>
+  <p>Source: {{ scan.source }} · Scanned: {{ scan.created_at }}</p>
+  {% if scan.narrative %}
+    <div class="narrative">
+      <h3>Narrative (Claude layer)</h3>
+      <p style="white-space: pre-wrap">{{ scan.narrative }}</p>
+    </div>
+  {% endif %}
+  <pre class="report">{{ scan.report }}</pre>
+{% endblock %}
