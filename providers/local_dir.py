@@ -60,10 +60,11 @@ def _load_manifest_file(path: Path) -> dict:
     return data
 
 
-def _synthesize_from_pyproject(path: Path) -> dict | None:
+def synth_pyproject_text(text: str) -> dict | None:
+    """Synthesize manifest metadata from pyproject.toml content."""
     try:
-        project = tomllib.loads(path.read_text(encoding="utf-8")).get("project", {})
-    except (OSError, tomllib.TOMLDecodeError):
+        project = tomllib.loads(text).get("project", {})
+    except tomllib.TOMLDecodeError:
         return None
     if not project:
         return None
@@ -86,10 +87,18 @@ def _synthesize_from_pyproject(path: Path) -> dict | None:
     return manifest or None
 
 
-def _synthesize_from_package_json(path: Path) -> dict | None:
+def _synthesize_from_pyproject(path: Path) -> dict | None:
     try:
-        pkg = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        return synth_pyproject_text(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+
+
+def synth_package_json_text(text: str) -> dict | None:
+    """Synthesize manifest metadata from package.json content."""
+    try:
+        pkg = json.loads(text)
+    except ValueError:
         return None
     if not isinstance(pkg, dict):
         return None
@@ -108,6 +117,13 @@ def _synthesize_from_package_json(path: Path) -> dict | None:
     if repo:
         manifest["repository"] = repo
     return manifest or None
+
+
+def _synthesize_from_package_json(path: Path) -> dict | None:
+    try:
+        return synth_package_json_text(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
 
 
 def _resolve_manifest(root: Path, manifest_path: Path | str | None) -> tuple[dict, Path | None]:

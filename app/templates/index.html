@@ -1,21 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Scan a local server directory</h2>
-  <form class="scan" method="post" action="/scan">
-    <label>Server directory path
-      <input type="text" name="path" placeholder="/path/to/mcp-server" required>
+  <h2>Scan an MCP server</h2>
+  <form class="scan" method="post" action="/scan" enctype="multipart/form-data">
+    <label class="folder-btn">
+      Choose Folder…
+      <input type="file" name="files" webkitdirectory directory multiple required
+             onchange="showPick(this)">
     </label>
-    <label>Intake manifest path (optional — for third-party servers under review)
-      <input type="text" name="manifest_path" placeholder="/path/to/intake.json">
-    </label>
-    <button type="submit">Scan</button>
+    <p id="picked" class="picked">No folder chosen yet.</p>
+    <button type="submit" id="scanbtn" disabled>Scan</button>
   </form>
-
-  <h2>Or upload files</h2>
-  <form class="scan" method="post" action="/upload" enctype="multipart/form-data">
-    <label>Manifest + key source files
-      <input type="file" name="files" multiple required>
-    </label>
-    <button type="submit">Scan upload</button>
-  </form>
+  <script>
+    function showPick(input) {
+      var msg = document.getElementById('picked');
+      var btn = document.getElementById('scanbtn');
+      if (input.files.length) {
+        var top = input.files[0].webkitRelativePath.split('/')[0] || 'selected folder';
+        msg.textContent = 'Selected: ' + top + ' (' + input.files.length + ' files)';
+        btn.disabled = false;
+      } else {
+        msg.textContent = 'No folder chosen yet.';
+        btn.disabled = true;
+      }
+    }
+  </script>
 {% endblock %}

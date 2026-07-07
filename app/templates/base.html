@@ -16,6 +16,12 @@
     input[type=text] { padding: .45rem; border: 1px solid #bbb; border-radius: 4px; font-size: .95rem; }
     button { padding: .5rem 1rem; background: var(--accent); color: #fff; border: 0;
              border-radius: 4px; cursor: pointer; font-size: .95rem; width: fit-content; }
+    button:disabled { background: #9db8d6; cursor: not-allowed; }
+    .folder-btn { display: inline-block; width: fit-content; padding: .5rem 1rem;
+                  background: #eef3fb; border: 1px solid var(--accent); color: var(--accent);
+                  border-radius: 4px; cursor: pointer; font-size: .95rem; font-weight: 600; }
+    .folder-btn input { display: none; }
+    .picked { color: #555; font-size: .9rem; margin: .2rem 0; }
     table { border-collapse: collapse; width: 100%; }
     th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid #ddd; }
     .verdict { font-weight: 600; }

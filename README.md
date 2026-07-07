@@ -51,6 +51,15 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest -q   # tests are fully offline: API keys cleared, sockets blocked
 ```
 
+**Web UI:** the home page is a single folder picker and a Scan button. Choosing a folder opens the
+operating system's native folder browser; the picked folder's files are uploaded, the scanner
+checks whether the folder is actually an MCP server (a manifest file or MCP-server code), and
+either shows the full report or a plain "No MCP server found in this folder" message. Past scans
+are stored and browsable under History.
+
+**CLI:** point it at a directory path directly (optionally with a reviewer-authored intake
+manifest for a third-party server).
+
 Optional layers (both strictly additive — the deterministic verdict never depends on them):
 
 - `GITHUB_TOKEN` set → the provenance check runs, scoring Maintenance & Provenance from
@@ -109,7 +118,8 @@ Static analysis has boundaries, and this tool reports them rather than pretendin
 
 ```
 providers/local_dir      ingest a server directory (manifest discovery + config/doc sweep)
-providers/upload         ingest uploaded files
+providers/folder         ingest an uploaded folder tree (browser folder picker); detects
+                         whether the folder is an MCP server before scanning
 scanning/gates           the four hard gates (regex/pattern static analysis)
 scanning/rubric          scored categories -> weighted, normalized score + band
 scanning/provenance      opt-in GitHub provenance check (Phase 3)
