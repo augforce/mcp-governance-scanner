@@ -33,6 +33,22 @@ deterministic result.
 **85–100** Approved · **60–84** Approved with Conditions · **below 60** Review Required ·
 **any gate tripped** Fail.
 
+### Reports are written for non-experts, with the evidence kept
+
+Every report opens with a plain-English **Bottom line** stating what the verdict means and why,
+and every finding is a plain sentence with the engine's technical finding cited beneath it as
+evidence — readable by whoever has to sign off, auditable by whoever has to verify. For example:
+
+> **Bottom line:** This server fails automatically because a secret key or password is written
+> directly into its code or settings, so anyone who obtains a copy of this server gets the
+> secret too. A problem like this is a deal-breaker regardless of how well the server would
+> have scored elsewhere, so no category scores are reported.
+>
+> **Hard gate: Hardcoded credentials**
+> - **server.py:7** — Credential assigned as a literal instead of read from the environment or
+>   a secrets manager.
+>   - `API_KEY = "sk-live-9f8e..."`
+
 ### Provenance is never taken on faith
 
 Everything a manifest says about itself (repository, author, version, license) is self-reported —
@@ -51,11 +67,16 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest -q   # tests are fully offline: API keys cleared, sockets blocked
 ```
 
-**Web UI:** the home page is a single folder picker and a Scan button. Choosing a folder opens the
-operating system's native folder browser; the picked folder's files are uploaded, the scanner
-checks whether the folder is actually an MCP server (a manifest file or MCP-server code), and
-either shows the full report or a plain "No MCP server found in this folder" message. Past scans
-are stored and browsable under History.
+**Web UI:** the home page is a folder picker plus a local-path fallback. Choosing a folder opens
+the operating system's native folder browser, and you can point it at a real project's **root**
+folder: dependency and system bulk (`.venv`, `node_modules`, `.git`, caches, build output, hidden
+folders, files over 1MB, non-source file types) is excluded in the browser *before* upload, using
+the same skip list as the server-side sweep. Uploads accept up to 20,000 files after exclusion;
+for anything larger, the "enter a folder path" field reads the folder directly on the machine
+through the identical pipeline — no upload, no size limit. Either way the scanner checks whether
+the folder is actually an MCP server (a manifest file or MCP-server code) and shows the full
+report or a plain "No MCP server found in this folder" message. Past scans are stored and
+browsable under History.
 
 **CLI:** point it at a directory path directly (optionally with a reviewer-authored intake
 manifest for a third-party server).
@@ -123,7 +144,8 @@ providers/folder         ingest an uploaded folder tree (browser folder picker);
 scanning/gates           the four hard gates (regex/pattern static analysis)
 scanning/rubric          scored categories -> weighted, normalized score + band
 scanning/provenance      opt-in GitHub provenance check (Phase 3)
-analysis/explainer       deterministic markdown report of every finding (default, offline)
+analysis/explainer       deterministic plain-language report: Bottom line summary, every finding
+                         translated to plain English with the technical finding cited as evidence
 analysis/claude_judge    optional Claude narrative layer (Phase 3; failures degrade to deterministic)
 app/scan.py              orchestrator: ingest -> gates -> rubric -> verdict
 ```
