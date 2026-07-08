@@ -41,6 +41,29 @@ GATE_PLAIN = {
     ),
 }
 
+# Actionable remedy per gate, rendered once per gate section.
+GATE_FIXES = {
+    "hardcoded_credentials": (
+        "Remove the secret from the code, read it from an environment "
+        "variable or a secrets manager instead, and rotate the exposed key — "
+        "treat it as already leaked."
+    ),
+    "unvalidated_input": (
+        "Validate the input before it reaches the sink: use parameterized "
+        "queries, pass subprocess arguments as a list instead of building "
+        "shell strings, and allow-list acceptable file paths."
+    ),
+    "undisclosed_network_calls": (
+        "Either remove the call or disclose the endpoint in the manifest "
+        "(permissions.network) or documentation so the data flow can be "
+        "reviewed and approved."
+    ),
+    "credential_echo": (
+        "Remove the credential from the message, or mask it (for example, "
+        "log only the last four characters)."
+    ),
+}
+
 CATEGORY_LABELS = {
     rubric.CATEGORY_PERMISSION_SCOPE: "Permission & Scope",
     rubric.CATEGORY_TOOL_HYGIENE: "Tool Definition Hygiene",
@@ -79,106 +102,146 @@ _BAND_PHRASES = {
     ),
 }
 
-# Ordered (pattern, template) pairs covering every finding string the engine
-# can emit (scanning/rubric.py). First match wins; a finding matching nothing
-# renders verbatim — never dropped. Order matters only where one pattern is a
-# prefix of another ("open issues — significant" before "open issues.").
-_TRANSLATIONS: tuple[tuple[re.Pattern, str], ...] = (
+# Ordered (pattern, plain template, suggested-fix template) triples covering
+# every finding string the engine can emit (scanning/rubric.py). First match
+# wins; a finding matching nothing renders verbatim — never dropped. A None
+# fix is deliberate: good-news and purely informational findings have nothing
+# to fix. Order matters only where one pattern is a prefix of another
+# ("open issues — significant" before "open issues.").
+_TRANSLATIONS: tuple[tuple[re.Pattern, str, str | None], ...] = (
     (
         re.compile(r"^No permission declarations in the manifest"),
         "The server never says what file or internet access it wants, so its requests can't be judged.",
+        "Add a 'permissions' section to the manifest declaring the file and internet access the server needs.",
     ),
     (
         re.compile(r"^Wildcard or unbounded filesystem grant: '(?P<path>.*)'"),
         "It asks for sweeping file access ('{path}') instead of just the specific folders it needs.",
+        "Replace '{path}' with the specific folder(s) the tools actually need to read or write.",
     ),
     (
         re.compile(r"^Wildcard network grant: '(?P<host>.*)'"),
         "It asks for broad internet access ('{host}') instead of naming the specific sites it needs.",
+        "Replace '{host}' with the specific hostname(s) the server actually contacts.",
     ),
     (
         re.compile(r"^No tools declared in the manifest\."),
         "The server doesn't describe any tools, so there is nothing to check its behavior against.",
+        "Declare each tool in the manifest with a name, a description, and an input schema.",
     ),
     (
         re.compile(r"^Tool '(?P<name>.*)' has a missing or vague description\."),
         "The tool '{name}' doesn't explain what it does.",
+        "Write a description that says what the tool does, what input it takes, and what it returns.",
     ),
     (
         re.compile(r"^Tool '(?P<name>.*)' declares no input schema\."),
         "The tool '{name}' doesn't say what input it expects.",
+        "Add an inputSchema to the tool listing each parameter and its type.",
     ),
     (
         re.compile(r"^Tool '(?P<name>.*)' has no input constraints or validation\."),
         "The tool '{name}' accepts anything sent to it, with no checks or limits.",
+        "Add validation to the schema: mark required fields and set limits "
+        "(enum, maxLength, minimum/maximum, pattern).",
     ),
     (
         re.compile(r"^Broad network scope: '(?P<host>.*)'"),
         "Its declared internet access ('{host}') covers far more sites than a single purpose needs.",
+        "Narrow '{host}' to the specific hostname(s) this server needs.",
     ),
     (
         re.compile(r"^(?P<count>\d+) distinct network hosts declared"),
         "It talks to {count} different internet services — each one is another place your data can go.",
+        "Remove any hosts the tools don't strictly need; each remaining one should be justifiable.",
     ),
     (
         re.compile(r"^(?P<where>\S+:\d+) — network call destination is not statically"),
         "At {where}, the code builds an internet address while running, so we can't "
         "confirm where it sends data — a person should check this.",
+        "Use a fixed URL where possible; if the destination must be configurable, "
+        "document the allowed endpoint(s) so a reviewer can check them.",
     ),
     (
         re.compile(r"^Manifest field '(?P<field>.*)' claimed as '(?P<value>.*)' — not independently verified\."),
         "It says its {field} is '{value}', but nothing confirms that claim.",
+        "Verify the claim independently — run the opt-in GitHub provenance check "
+        "(set GITHUB_TOKEN) or review the {field} by hand.",
     ),
     (
         re.compile(r"^Manifest field '(?P<field>.*)' missing"),
         "It doesn't state its {field} at all.",
+        "Add the {field} field to the manifest so it can be independently verified.",
     ),
     (
         re.compile(r"^Repository verified on GitHub: (?P<repo>.*)\."),
         "Its code repository was found on GitHub and matches what it claims ({repo}).",
+        None,  # good news — nothing to fix
     ),
     (
         re.compile(r"^Repository is archived"),
         "The project is archived — nobody maintains it anymore.",
+        "Prefer a maintained fork or an actively maintained alternative server.",
     ),
     (
         re.compile(r"^Last push (?P<days>\d+) days ago — aging"),
         "The code was last updated {days} days ago — it may be falling out of date.",
+        "Check with the publisher whether the project is still maintained before relying on it.",
     ),
     (
         re.compile(r"^Last push (?P<days>\d+) days ago — effectively unmaintained"),
         "The code hasn't been touched in {days} days — it is effectively abandoned.",
+        "Treat it as abandoned: prefer a maintained fork or an alternative server.",
     ),
     (
         re.compile(r"^(?P<count>\d+) open issues — significant"),
         "It has {count} unresolved problem reports — a large backlog nobody is addressing.",
+        "Review the open issues for security-relevant reports before adopting this server.",
     ),
     (
         re.compile(r"^(?P<count>\d+) open issues\."),
         "It has {count} unresolved problem reports.",
+        None,  # informational at this volume — the score already reflects it
     ),
     (
         re.compile(r"^No license detected"),
         "The project publishes no license, so its terms of use are unclear.",
+        "Ask the publisher to add a license; without one the terms of use are undefined.",
     ),
 )
 
 
-def _plain_finding(finding: str) -> str | None:
-    """Translate an engine finding to plain language; None when unrecognized."""
-    for pattern, template in _TRANSLATIONS:
+def _match_translation(finding: str):
+    for pattern, plain, fix in _TRANSLATIONS:
         match = pattern.match(finding)
         if match:
-            return template.format(**match.groupdict())
-    return None
+            return match, plain, fix
+    return None, None, None
+
+
+def _plain_finding(finding: str) -> str | None:
+    """Translate an engine finding to plain language; None when unrecognized."""
+    match, plain, _fix = _match_translation(finding)
+    return plain.format(**match.groupdict()) if match else None
+
+
+def _suggested_fix(finding: str) -> str | None:
+    """Actionable fix for a finding; None when unrecognized or nothing to fix."""
+    match, _plain, fix = _match_translation(finding)
+    return fix.format(**match.groupdict()) if match and fix else None
 
 
 def _finding_lines(finding: str) -> list[str]:
-    """Markdown bullet for one finding: plain sentence, engine text as evidence."""
+    """Markdown bullet for one finding: plain sentence, engine text as
+    evidence, and a suggested fix where one applies."""
     plain = _plain_finding(finding)
     if plain is None:
         return [f"- {finding}"]
-    return [f"- {plain}", f"  - Evidence: {finding}"]
+    lines = [f"- {plain}", f"  - Evidence: {finding}"]
+    fix = _suggested_fix(finding)
+    if fix:
+        lines.append(f"  - Suggested fix: {fix}")
+    return lines
 
 
 def _join_reasons(reasons: list[str]) -> str:
@@ -215,6 +278,10 @@ def _explain_fail(result: ScanResult) -> str:
             location = f.file if f.line == 0 else f"{f.file}:{f.line}"
             lines.append(f"- **{location}** — {f.explanation}")
             lines.append(f"  - `{f.snippet}`")
+        fix = GATE_FIXES.get(gate)
+        if fix:
+            lines.append("")
+            lines.append(f"**Suggested fix:** {fix}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

@@ -95,6 +95,7 @@ class TestScoredReport:
 class TestFindingTranslations:
     # One representative engine string per translation pattern -> the plain
     # sentence it must produce. This is the closed set rubric.py can emit.
+    # (Suggested fixes for these patterns are covered separately below.)
     CASES = [
         (
             "No permission declarations in the manifest — requested access cannot be assessed.",
@@ -199,6 +200,42 @@ class TestFindingTranslations:
 
         assert _finding_lines("Mystery finding.") == ["- Mystery finding."]
 
+    def test_finding_lines_include_a_suggested_fix(self):
+        from analysis.explainer import _finding_lines
+
+        lines = _finding_lines("Wildcard or unbounded filesystem grant: '*'")
+        assert lines[2] == (
+            "  - Suggested fix: Replace '*' with the specific folder(s) the "
+            "tools actually need to read or write."
+        )
+
+    def test_suggested_fix_carries_finding_parameters(self):
+        from analysis.explainer import _suggested_fix
+
+        fix = _suggested_fix("Manifest field 'license' missing — provenance not verified.")
+        assert fix == "Add the license field to the manifest so it can be independently verified."
+
+    def test_good_news_and_unknown_findings_get_no_fix(self):
+        from analysis.explainer import _finding_lines, _suggested_fix
+
+        # Positive finding: nothing to fix.
+        assert _suggested_fix("Repository verified on GitHub: example/notes-server.") is None
+        # Unknown finding: no plain text, no fix, rendered verbatim.
+        assert _suggested_fix("Some future finding.") is None
+        assert not any("Suggested fix" in ln for ln in _finding_lines("Some future finding."))
+
+    def test_every_translated_problem_finding_has_a_fix_or_deliberately_none(self):
+        # Guard: each translation pattern either carries a fix or is in the
+        # explicit no-fix set (good news / purely informational findings).
+        from analysis.explainer import _TRANSLATIONS
+
+        no_fix_expected = ("Repository verified", "open issues\\.")
+        for pattern, _plain, fix in _TRANSLATIONS:
+            if any(marker in pattern.pattern for marker in no_fix_expected):
+                assert fix is None, pattern.pattern
+            else:
+                assert fix, f"missing suggested fix for: {pattern.pattern}"
+
     def test_join_reasons(self):
         from analysis.explainer import _join_reasons
 
@@ -247,6 +284,14 @@ class TestPlainFailReport:
         report = self._multi_gate_report()
         assert report.count("In plain terms:") == 2
 
+    def test_each_gate_section_carries_a_suggested_fix(self):
+        report = explain(scan_artifact(fixtures.hardcoded_credentials_artifact()))
+        assert "**Suggested fix:**" in report
+        assert "rotate the exposed key" in report
+
+        multi = self._multi_gate_report()
+        assert multi.count("**Suggested fix:**") == 2  # one per gate section
+
 
 class TestPlainScoredReport:
     def _low_scoring_artifact(self):
@@ -292,3 +337,11 @@ class TestPlainScoredReport:
     def test_clean_categories_say_no_problems_found(self):
         report = explain(scan_artifact(fixtures.clean_artifact()))
         assert "No problems found." in report
+
+    def test_scored_findings_carry_suggested_fixes(self):
+        report = explain(scan_artifact(self._low_scoring_artifact()))
+        assert "  - Suggested fix: Replace '*' with the specific folder(s)" in report
+        assert (
+            "  - Suggested fix: Write a description that says what the tool does"
+            in report
+        )

@@ -37,7 +37,8 @@ deterministic result.
 
 Every report opens with a plain-English **Bottom line** stating what the verdict means and why,
 and every finding is a plain sentence with the engine's technical finding cited beneath it as
-evidence — readable by whoever has to sign off, auditable by whoever has to verify. For example:
+evidence and a **suggested fix** where one applies — readable by whoever has to sign off,
+auditable by whoever has to verify, actionable for whoever has to remediate. For example:
 
 > **Bottom line:** This server fails automatically because a secret key or password is written
 > directly into its code or settings, so anyone who obtains a copy of this server gets the
@@ -48,6 +49,9 @@ evidence — readable by whoever has to sign off, auditable by whoever has to ve
 > - **server.py:7** — Credential assigned as a literal instead of read from the environment or
 >   a secrets manager.
 >   - `API_KEY = "sk-live-9f8e..."`
+>
+> **Suggested fix:** Remove the secret from the code, read it from an environment variable or a
+> secrets manager instead, and rotate the exposed key — treat it as already leaked.
 
 ### Provenance is never taken on faith
 
