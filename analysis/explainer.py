@@ -203,7 +203,9 @@ def _explain_fail(result: ScanResult) -> str:
     for gate in gates:
         lines.append(f"## Hard gate: {GATE_LABELS.get(gate, gate)}")
         lines.append("")
-        plain = GATE_PLAIN.get(gate)
+        # With a single gate the Bottom line already gave this exact reason;
+        # per-gate intros only earn their place when there are several.
+        plain = GATE_PLAIN.get(gate) if len(gates) > 1 else None
         if plain:
             lines.append(f"In plain terms: {plain[0].upper()}{plain[1:]}.")
             lines.append("")

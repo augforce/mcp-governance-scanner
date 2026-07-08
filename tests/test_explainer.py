@@ -214,23 +214,38 @@ class TestPlainFailReport:
         assert "fails automatically" in report
         assert "secret key or password is written directly into its code" in report
 
-    def test_gate_section_has_plain_intro_and_keeps_evidence(self):
+    def test_gate_section_keeps_evidence(self):
         report = explain(scan_artifact(fixtures.shell_injection_artifact()))
-        assert "In plain terms:" in report
         assert "without checking it first" in report
         # Technical evidence still cited: file:line and the offending snippet.
         assert "shell_tool.py:5" in report
         assert "os.system" in report
 
-    def test_multiple_gates_all_named_in_bottom_line(self):
+    def test_single_gate_states_plain_reason_only_once(self):
+        # The Bottom line already gives the plain reason; a lone gate section
+        # must not repeat it verbatim as an intro.
+        report = explain(scan_artifact(fixtures.hardcoded_credentials_artifact()))
+        assert "In plain terms:" not in report
+        assert report.count("written directly into its code") == 1
+
+    def _multi_gate_report(self):
         from scanning.models import ServerArtifact
 
         art = fixtures.hardcoded_credentials_artifact()
         files = dict(art.source_files)
         files["debug.py"] = fixtures.CREDENTIAL_ECHO_SOURCE
-        report = explain(scan_artifact(ServerArtifact(manifest=art.manifest, source_files=files)))
+        return explain(scan_artifact(ServerArtifact(manifest=art.manifest, source_files=files)))
+
+    def test_multiple_gates_all_named_in_bottom_line(self):
+        report = self._multi_gate_report()
         assert "written directly into its code" in report
         assert "output or logs" in report
+
+    def test_multiple_gates_keep_per_section_intros(self):
+        # With several gates, each section's intro says which plain reason
+        # belongs to which gate.
+        report = self._multi_gate_report()
+        assert report.count("In plain terms:") == 2
 
 
 class TestPlainScoredReport:
