@@ -164,3 +164,44 @@ class TestEndToEnd:
         )
         findings = gates.check_undisclosed_network_calls(ingest(tmp_path))
         assert any("sneaky.tracker.example" in f.snippet for f in findings)
+
+
+class TestReadTree:
+    def test_paths_prefixed_with_folder_name_like_a_browser_upload(self, tmp_path):
+        root = tmp_path / "my-server"
+        root.mkdir()
+        (root / "server.py").write_text("x = 1\n")
+        tree = local_dir.read_tree(root)
+        assert tree == {"my-server/server.py": b"x = 1\n"}
+
+    def test_bulk_directories_excluded(self, tmp_path):
+        root = tmp_path / "proj"
+        root.mkdir()
+        (root / "server.py").write_text("x = 1\n")
+        for junk in (".venv/lib/mod.py", "node_modules/pkg/index.js",
+                     "__pycache__/server.cpython-312.pyc", ".git/config",
+                     "dist/bundle.js", "build/out.js"):
+            path = root / junk
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("junk\n")
+        tree = local_dir.read_tree(root)
+        assert list(tree) == ["proj/server.py"]
+
+    def test_oversized_files_skipped(self, tmp_path):
+        root = tmp_path / "proj"
+        root.mkdir()
+        (root / "server.py").write_text("x = 1\n")
+        (root / "huge.json").write_bytes(b"x" * (local_dir.MAX_FILE_BYTES + 1))
+        assert list(local_dir.read_tree(root)) == ["proj/server.py"]
+
+    def test_feeds_the_same_detection_pipeline_as_an_upload(self, tmp_path):
+        from providers.folder import detect_mcp_server
+
+        root = tmp_path / "svc"
+        root.mkdir()
+        (root / "manifest.json").write_text('{"name": "svc"}')
+        (root / "server.py").write_text("from mcp import tool\n")
+        artifact = detect_mcp_server(local_dir.read_tree(root))
+        assert artifact is not None
+        assert artifact.manifest["name"] == "svc"
+        assert "svc/server.py" in artifact.source_files

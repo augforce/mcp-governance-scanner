@@ -163,6 +163,26 @@ def _is_vendored(rel_parts: tuple[str, ...]) -> bool:
     return any(rel_parts[-1].lower().endswith(marker) for marker in VENDOR_NAME_MARKERS)
 
 
+def read_tree(root: Path | str) -> dict[str, bytes]:
+    """The folder as {picker-style relative path: bytes} — the same tree a
+    browser folder upload delivers, after the same sweep rules (bulk dirs
+    skipped, hidden files skipped, per-file size cap). Lets a server-side
+    path read feed the identical detection/ingestion pipeline as an upload,
+    with no upload size limits.
+    """
+    root = Path(root)
+    tree: dict[str, bytes] = {}
+    for path in _iter_files(root):
+        if path.stat().st_size > MAX_FILE_BYTES:
+            continue
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        tree[f"{root.name}/{'/'.join(path.relative_to(root).parts)}"] = data
+    return tree
+
+
 def ingest(root: Path | str, manifest_path: Path | str | None = None) -> ServerArtifact:
     """Ingest the server directory at ``root`` into a ServerArtifact."""
     root = Path(root)
