@@ -205,3 +205,29 @@ class TestFindingTranslations:
         assert _join_reasons(["a"]) == "a"
         assert _join_reasons(["a", "b"]) == "a; and b"
         assert _join_reasons(["a", "b", "c"]) == "a; b; and c"
+
+
+class TestPlainFailReport:
+    def test_bottom_line_states_plain_reason(self):
+        report = explain(scan_artifact(fixtures.hardcoded_credentials_artifact()))
+        assert "**Bottom line:**" in report
+        assert "fails automatically" in report
+        assert "secret key or password is written directly into its code" in report
+
+    def test_gate_section_has_plain_intro_and_keeps_evidence(self):
+        report = explain(scan_artifact(fixtures.shell_injection_artifact()))
+        assert "In plain terms:" in report
+        assert "without checking it first" in report
+        # Technical evidence still cited: file:line and the offending snippet.
+        assert "shell_tool.py:5" in report
+        assert "os.system" in report
+
+    def test_multiple_gates_all_named_in_bottom_line(self):
+        from scanning.models import ServerArtifact
+
+        art = fixtures.hardcoded_credentials_artifact()
+        files = dict(art.source_files)
+        files["debug.py"] = fixtures.CREDENTIAL_ECHO_SOURCE
+        report = explain(scan_artifact(ServerArtifact(manifest=art.manifest, source_files=files)))
+        assert "written directly into its code" in report
+        assert "output or logs" in report

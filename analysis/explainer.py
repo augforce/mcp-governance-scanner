@@ -19,6 +19,28 @@ GATE_LABELS = {
     "credential_echo": "Credentials echoed in output or logs",
 }
 
+# Plain-language reason per gate — lowercase clauses composed into the
+# Bottom line sentence and capitalized as each gate section's intro.
+GATE_PLAIN = {
+    "hardcoded_credentials": (
+        "a secret key or password is written directly into its code or settings, "
+        "so anyone who obtains a copy of this server gets the secret too"
+    ),
+    "unvalidated_input": (
+        "it passes text it receives straight into system commands, file paths, "
+        "or queries without checking it first — an attacker could exploit that "
+        "to run their own commands"
+    ),
+    "undisclosed_network_calls": (
+        "it contacts internet addresses that its documentation never mentions, "
+        "so it may be sending data somewhere you don't know about"
+    ),
+    "credential_echo": (
+        "it writes secret keys or passwords into its output or logs, where "
+        "they can easily leak"
+    ),
+}
+
 CATEGORY_LABELS = {
     rubric.CATEGORY_PERMISSION_SCOPE: "Permission & Scope",
     rubric.CATEGORY_TOOL_HYGIENE: "Tool Definition Hygiene",
@@ -136,17 +158,24 @@ def _join_reasons(reasons: list[str]) -> str:
 
 
 def _explain_fail(result: ScanResult) -> str:
+    gates = sorted({f.gate for f in result.gate_findings})
+    reasons = [GATE_PLAIN.get(gate, GATE_LABELS.get(gate, gate)) for gate in gates]
     lines = [
         "# Verdict: Fail",
         "",
-        "One or more hard gates tripped. A tripped gate is an automatic fail "
-        "regardless of how the server would have scored on the weighted rubric, "
-        "so no category scores are reported.",
+        f"**Bottom line:** This server fails automatically because "
+        f"{_join_reasons(reasons)}. A problem like this is a deal-breaker "
+        "regardless of how well the server would have scored elsewhere, so no "
+        "category scores are reported.",
         "",
     ]
-    for gate in sorted({f.gate for f in result.gate_findings}):
+    for gate in gates:
         lines.append(f"## Hard gate: {GATE_LABELS.get(gate, gate)}")
         lines.append("")
+        plain = GATE_PLAIN.get(gate)
+        if plain:
+            lines.append(f"In plain terms: {plain[0].upper()}{plain[1:]}.")
+            lines.append("")
         for f in result.gate_findings:
             if f.gate != gate:
                 continue
