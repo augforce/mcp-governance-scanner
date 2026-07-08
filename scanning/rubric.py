@@ -48,10 +48,13 @@ _DYNAMIC_DEST_DEDUCTION = 15
 
 # Network calls whose destination argument is captured for literal-vs-dynamic
 # inspection. Deliberately excludes generic method names (e.g. session.get)
-# that would false-positive on non-network objects.
+# that would false-positive on non-network objects. 'fetch' means the global
+# JS fetch() API only: not 'obj.fetch()' (the server's own method), and not
+# 'def fetch('/'function fetch(' (a definition, not a call).
 _NETWORK_CALL_RE = re.compile(
     r"\b(?:(?:requests|httpx|axios)\.(?:get|post|put|delete|patch|head|options)"
-    r"|urllib\.request\.urlopen|fetch)\s*\(\s*(?P<arg>[^,)\n]*)"
+    r"|urllib\.request\.urlopen"
+    r"|(?<![\w.])(?<!def )(?<!function )fetch)\s*\(\s*(?P<arg>[^,)\n]*)"
 )
 # A destination we can check statically: a plain (non-f-string) string literal.
 _LITERAL_ARG_RE = re.compile(r"""^["']""")

@@ -180,6 +180,29 @@ class TestDynamicDestinationFlag:
         assert result.score == 100
         assert result.findings == ()
 
+    def test_defining_or_calling_a_method_named_fetch_is_not_a_network_call(self):
+        # Regression: real-world false positives (career-intelligence scan).
+        # 'def fetch(self)' is a method definition and 'provider.fetch()' is
+        # a call to the server's own method — neither is the JS fetch() API.
+        art = fixtures.artifact_with_source(
+            "class Provider:\n"
+            "    def fetch(self) -> list:\n"
+            "        return []\n"
+            "\n"
+            "jobs = Provider().fetch()\n",
+            "providers.py",
+        )
+        result = rubric.score_network_exposure(art)
+        assert result.score == 100
+        assert result.findings == ()
+
+    def test_bare_fetch_call_still_soft_flagged(self):
+        # The real JS fetch() API with a variable destination stays flagged.
+        art = fixtures.artifact_with_source(
+            "const data = fetch(endpoint);\n", "client.js"
+        )
+        assert rubric.score_network_exposure(art).score == 85
+
     def test_commented_out_network_call_not_soft_flagged(self):
         # Same principle as the network gate: a call in a comment is not a
         # call the program makes, so it needs no manual review.

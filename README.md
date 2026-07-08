@@ -82,11 +82,32 @@ the folder is actually an MCP server (a manifest file or MCP-server code) and sh
 report or a plain "No MCP server found in this folder" message. Past scans are stored and
 browsable under History.
 
-## Example Scan:
-job-match — Approved with Conditions (76/100)
-Source: folder · Scanned: 2026-07-08T15:04:41+00:00
+**CLI:** point it at a directory path directly (optionally with a reviewer-authored intake
+manifest for a third-party server).
 
-**Verdict: Approved with Conditions**
+Optional layers (both strictly additive — the deterministic verdict never depends on them):
+
+- `GITHUB_TOKEN` set → the provenance check runs, scoring Maintenance & Provenance from
+  verified repository facts (commit recency, open issues, license) and lifting the
+  Approved-with-Conditions cap. Any failure degrades back to "not verified."
+- `ANTHROPIC_API_KEY` set (plus `pip install anthropic`) → a Claude-written plain-English
+  narrative appears above the deterministic report. Every failure path returns nothing and
+  the deterministic report stands; Claude never re-scores or overrides a gate.
+
+The scanner looks for `manifest.json` / `manifest.yaml` in the server directory, falls back to
+metadata synthesized from `pyproject.toml` / `package.json`, or accepts an explicit intake
+manifest authored by the reviewer (the normal path for third-party servers). Rubric weights and
+band thresholds live in `config/rubric.yaml` and are validated on load.
+
+## Example scan
+
+Real output: the author's `job-match` MCP server (the career-intelligence project), scanned
+by picking its project root folder in the web UI.
+
+job-match — Approved with Conditions (76/100)
+Source: folder · Scanned: 2026-07-08
+
+**Verdict:** Approved with Conditions
 
 **Bottom line:** This server scored 76 out of 100 on what could be checked — good, but not good enough for automatic approval — it should only be used once the conditions below are addressed. The biggest problem: its tools don't clearly say what they do or check the input they receive. We also could not confirm who publishes or maintains this server, so that part is left out of the score.
 
@@ -121,17 +142,8 @@ Score: **76/100**, based on the 75/100 rubric points that could be verified offl
 **Network & Data Exposure: 85/100**
 *How widely does it share data over the internet?*
 
-- At career-intelligence/app/main.py:142, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
-  - Evidence: career-intelligence/app/main.py:142 — network call destination is not statically determinable ('evs = [_ingest(conn, job)[1] for job in MockProvider().fetch()]'); requires manual review against the disclosed endpoints.
-  - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
 - At career-intelligence/app/providers/http.py:22, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
   - Evidence: career-intelligence/app/providers/http.py:22 — network call destination is not statically determinable ('with urllib.request.urlopen(req, timeout=timeout) as resp:'); requires manual review against the disclosed endpoints.
-  - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
-- At career-intelligence/app/providers/base.py:7, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
-  - Evidence: career-intelligence/app/providers/base.py:7 — network call destination is not statically determinable ('def fetch(self) -> list[NormalizedJob]: ...'); requires manual review against the disclosed endpoints.
-  - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
-- At career-intelligence/app/providers/mock.py:34, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
-  - Evidence: career-intelligence/app/providers/mock.py:34 — network call destination is not statically determinable ('def fetch(self) -> list[NormalizedJob]:'); requires manual review against the disclosed endpoints.
   - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
 
 **Maintenance & Provenance: N/A — not independently verified**
@@ -149,24 +161,6 @@ Score: **76/100**, based on the 75/100 rubric points that could be verified offl
 - It doesn't state its license at all.
   - Evidence: Manifest field 'license' missing — provenance not verified.
   - Suggested fix: Add the license field to the manifest so it can be independently verified.
-
-## CLI: 
-
-Point it at a directory path directly (optionally with a reviewer-authored intake manifest for a third-party server).
-
-Optional layers (both strictly additive — the deterministic verdict never depends on them):
-
-- `GITHUB_TOKEN` set → the provenance check runs, scoring Maintenance & Provenance from
-  verified repository facts (commit recency, open issues, license) and lifting the
-  Approved-with-Conditions cap. Any failure degrades back to "not verified."
-- `ANTHROPIC_API_KEY` set (plus `pip install anthropic`) → a Claude-written plain-English
-  narrative appears above the deterministic report. Every failure path returns nothing and
-  the deterministic report stands; Claude never re-scores or overrides a gate.
-
-The scanner looks for `manifest.json` / `manifest.yaml` in the server directory, falls back to
-metadata synthesized from `pyproject.toml` / `package.json`, or accepts an explicit intake
-manifest authored by the reviewer (the normal path for third-party servers). Rubric weights and
-band thresholds live in `config/rubric.yaml` and are validated on load.
 
 ## Test corpus
 
