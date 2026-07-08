@@ -7,6 +7,8 @@ narrative on top of this; it never replaces it.
 
 from __future__ import annotations
 
+import re
+
 from scanning import rubric
 from scanning.models import ScanResult
 
@@ -23,6 +25,114 @@ CATEGORY_LABELS = {
     rubric.CATEGORY_NETWORK_EXPOSURE: "Network & Data Exposure",
     rubric.CATEGORY_MAINTENANCE: "Maintenance & Provenance",
 }
+
+# Ordered (pattern, template) pairs covering every finding string the engine
+# can emit (scanning/rubric.py). First match wins; a finding matching nothing
+# renders verbatim — never dropped. Order matters only where one pattern is a
+# prefix of another ("open issues — significant" before "open issues.").
+_TRANSLATIONS: tuple[tuple[re.Pattern, str], ...] = (
+    (
+        re.compile(r"^No permission declarations in the manifest"),
+        "The server never says what file or internet access it wants, so its requests can't be judged.",
+    ),
+    (
+        re.compile(r"^Wildcard or unbounded filesystem grant: '(?P<path>.*)'"),
+        "It asks for sweeping file access ('{path}') instead of just the specific folders it needs.",
+    ),
+    (
+        re.compile(r"^Wildcard network grant: '(?P<host>.*)'"),
+        "It asks for broad internet access ('{host}') instead of naming the specific sites it needs.",
+    ),
+    (
+        re.compile(r"^No tools declared in the manifest\."),
+        "The server doesn't describe any tools, so there is nothing to check its behavior against.",
+    ),
+    (
+        re.compile(r"^Tool '(?P<name>.*)' has a missing or vague description\."),
+        "The tool '{name}' doesn't explain what it does.",
+    ),
+    (
+        re.compile(r"^Tool '(?P<name>.*)' declares no input schema\."),
+        "The tool '{name}' doesn't say what input it expects.",
+    ),
+    (
+        re.compile(r"^Tool '(?P<name>.*)' has no input constraints or validation\."),
+        "The tool '{name}' accepts anything sent to it, with no checks or limits.",
+    ),
+    (
+        re.compile(r"^Broad network scope: '(?P<host>.*)'"),
+        "Its declared internet access ('{host}') covers far more sites than a single purpose needs.",
+    ),
+    (
+        re.compile(r"^(?P<count>\d+) distinct network hosts declared"),
+        "It talks to {count} different internet services — each one is another place your data can go.",
+    ),
+    (
+        re.compile(r"^(?P<where>\S+:\d+) — network call destination is not statically"),
+        "At {where}, the code builds an internet address while running, so we can't "
+        "confirm where it sends data — a person should check this.",
+    ),
+    (
+        re.compile(r"^Manifest field '(?P<field>.*)' claimed as '(?P<value>.*)' — not independently verified\."),
+        "It says its {field} is '{value}', but nothing confirms that claim.",
+    ),
+    (
+        re.compile(r"^Manifest field '(?P<field>.*)' missing"),
+        "It doesn't state its {field} at all.",
+    ),
+    (
+        re.compile(r"^Repository verified on GitHub: (?P<repo>.*)\."),
+        "Its code repository was found on GitHub and matches what it claims ({repo}).",
+    ),
+    (
+        re.compile(r"^Repository is archived"),
+        "The project is archived — nobody maintains it anymore.",
+    ),
+    (
+        re.compile(r"^Last push (?P<days>\d+) days ago — aging"),
+        "The code was last updated {days} days ago — it may be falling out of date.",
+    ),
+    (
+        re.compile(r"^Last push (?P<days>\d+) days ago — effectively unmaintained"),
+        "The code hasn't been touched in {days} days — it is effectively abandoned.",
+    ),
+    (
+        re.compile(r"^(?P<count>\d+) open issues — significant"),
+        "It has {count} unresolved problem reports — a large backlog nobody is addressing.",
+    ),
+    (
+        re.compile(r"^(?P<count>\d+) open issues\."),
+        "It has {count} unresolved problem reports.",
+    ),
+    (
+        re.compile(r"^No license detected"),
+        "The project publishes no license, so its terms of use are unclear.",
+    ),
+)
+
+
+def _plain_finding(finding: str) -> str | None:
+    """Translate an engine finding to plain language; None when unrecognized."""
+    for pattern, template in _TRANSLATIONS:
+        match = pattern.match(finding)
+        if match:
+            return template.format(**match.groupdict())
+    return None
+
+
+def _finding_lines(finding: str) -> list[str]:
+    """Markdown bullet for one finding: plain sentence, engine text as evidence."""
+    plain = _plain_finding(finding)
+    if plain is None:
+        return [f"- {finding}"]
+    return [f"- {plain}", f"  - Evidence: {finding}"]
+
+
+def _join_reasons(reasons: list[str]) -> str:
+    """'a' / 'a; and b' / 'a; b; and c' — reads as one sentence."""
+    if len(reasons) == 1:
+        return reasons[0]
+    return "; ".join(reasons[:-1]) + "; and " + reasons[-1]
 
 
 def _explain_fail(result: ScanResult) -> str:

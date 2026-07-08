@@ -90,3 +90,118 @@ class TestScoredReport:
         a = explain(scan_artifact(fixtures.clean_artifact()))
         b = explain(scan_artifact(fixtures.clean_artifact()))
         assert a == b
+
+
+class TestFindingTranslations:
+    # One representative engine string per translation pattern -> the plain
+    # sentence it must produce. This is the closed set rubric.py can emit.
+    CASES = [
+        (
+            "No permission declarations in the manifest — requested access cannot be assessed.",
+            "The server never says what file or internet access it wants, so its requests can't be judged.",
+        ),
+        (
+            "Wildcard or unbounded filesystem grant: '*'",
+            "It asks for sweeping file access ('*') instead of just the specific folders it needs.",
+        ),
+        (
+            "Wildcard network grant: '*.example.com'",
+            "It asks for broad internet access ('*.example.com') instead of naming the specific sites it needs.",
+        ),
+        (
+            "No tools declared in the manifest.",
+            "The server doesn't describe any tools, so there is nothing to check its behavior against.",
+        ),
+        (
+            "Tool 'do_task' has a missing or vague description.",
+            "The tool 'do_task' doesn't explain what it does.",
+        ),
+        (
+            "Tool 'do_task' declares no input schema.",
+            "The tool 'do_task' doesn't say what input it expects.",
+        ),
+        (
+            "Tool 'do_task' has no input constraints or validation.",
+            "The tool 'do_task' accepts anything sent to it, with no checks or limits.",
+        ),
+        (
+            "Broad network scope: '*'",
+            "Its declared internet access ('*') covers far more sites than a single purpose needs.",
+        ),
+        (
+            "4 distinct network hosts declared — each third-party data flow widens exposure.",
+            "It talks to 4 different internet services — each one is another place your data can go.",
+        ),
+        (
+            "server.py:13 — network call destination is not statically determinable "
+            "('resp = requests.post(base)'); requires manual review against the disclosed endpoints.",
+            "At server.py:13, the code builds an internet address while running, so we can't "
+            "confirm where it sends data — a person should check this.",
+        ),
+        (
+            "Manifest field 'author' claimed as 'anon' — not independently verified.",
+            "It says its author is 'anon', but nothing confirms that claim.",
+        ),
+        (
+            "Manifest field 'license' missing — provenance not verified.",
+            "It doesn't state its license at all.",
+        ),
+        (
+            "Repository verified on GitHub: example/notes-server.",
+            "Its code repository was found on GitHub and matches what it claims (example/notes-server).",
+        ),
+        (
+            "Repository is archived — no active maintenance.",
+            "The project is archived — nobody maintains it anymore.",
+        ),
+        (
+            "Last push 200 days ago — aging maintenance.",
+            "The code was last updated 200 days ago — it may be falling out of date.",
+        ),
+        (
+            "Last push 900 days ago — effectively unmaintained.",
+            "The code hasn't been touched in 900 days — it is effectively abandoned.",
+        ),
+        (
+            "120 open issues.",
+            "It has 120 unresolved problem reports.",
+        ),
+        (
+            "300 open issues — significant unaddressed backlog.",
+            "It has 300 unresolved problem reports — a large backlog nobody is addressing.",
+        ),
+        (
+            "No license detected on the repository.",
+            "The project publishes no license, so its terms of use are unclear.",
+        ),
+    ]
+
+    def test_every_engine_finding_translates(self):
+        from analysis.explainer import _plain_finding
+
+        for engine_text, plain_text in self.CASES:
+            assert _plain_finding(engine_text) == plain_text
+
+    def test_unknown_finding_returns_none(self):
+        from analysis.explainer import _plain_finding
+
+        assert _plain_finding("Some future finding the engine grew later.") is None
+
+    def test_finding_lines_keep_engine_text_as_evidence(self):
+        from analysis.explainer import _finding_lines
+
+        lines = _finding_lines("Wildcard network grant: '*'")
+        assert lines[0].startswith("- It asks for broad internet access")
+        assert lines[1] == "  - Evidence: Wildcard network grant: '*'"
+
+    def test_finding_lines_fall_back_verbatim(self):
+        from analysis.explainer import _finding_lines
+
+        assert _finding_lines("Mystery finding.") == ["- Mystery finding."]
+
+    def test_join_reasons(self):
+        from analysis.explainer import _join_reasons
+
+        assert _join_reasons(["a"]) == "a"
+        assert _join_reasons(["a", "b"]) == "a; and b"
+        assert _join_reasons(["a", "b", "c"]) == "a; b; and c"
