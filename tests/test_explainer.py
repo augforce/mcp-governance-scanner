@@ -231,3 +231,49 @@ class TestPlainFailReport:
         report = explain(scan_artifact(ServerArtifact(manifest=art.manifest, source_files=files)))
         assert "written directly into its code" in report
         assert "output or logs" in report
+
+
+class TestPlainScoredReport:
+    def _low_scoring_artifact(self):
+        import copy
+
+        from scanning.models import ServerArtifact
+
+        manifest = copy.deepcopy(fixtures.CLEAN_MANIFEST)
+        manifest["permissions"]["filesystem"] = ["*"]
+        manifest["permissions"]["network"] = ["*"]
+        manifest["tools"] = [{"name": "do_task"}]
+        return ServerArtifact(manifest=manifest, source_files={"server.py": fixtures.CLEAN_SOURCE})
+
+    def test_bottom_line_names_score_band_and_worst_categories(self):
+        report = explain(scan_artifact(self._low_scoring_artifact()))
+        assert "**Bottom line:**" in report
+        assert "out of 100" in report
+        assert "a person should review it" in report          # Review Required band
+        assert "The biggest problems:" in report
+        # tool_hygiene scores 0 -> named first; permission_scope 30 -> second.
+        assert "don't clearly say what they do" in report
+        assert "more access than its tools appear to need" in report
+
+    def test_scores_are_rounded_whole_numbers(self):
+        report = explain(scan_artifact(self._low_scoring_artifact()))
+        assert ".6667" not in report
+        assert ".0/100" not in report
+
+    def test_unverified_publisher_named_in_bottom_line(self):
+        report = explain(scan_artifact(fixtures.clean_artifact()))
+        assert "could not confirm who publishes or maintains this server" in report
+
+    def test_category_headings_carry_plain_questions(self):
+        report = explain(scan_artifact(fixtures.clean_artifact()))
+        assert "Does it ask for only the access it needs?" in report
+        assert "Do its tools say what they do and check their inputs?" in report
+
+    def test_findings_rendered_plain_with_evidence(self):
+        report = explain(scan_artifact(self._low_scoring_artifact()))
+        assert "It asks for sweeping file access ('*')" in report
+        assert "  - Evidence: Wildcard or unbounded filesystem grant: '*'" in report
+
+    def test_clean_categories_say_no_problems_found(self):
+        report = explain(scan_artifact(fixtures.clean_artifact()))
+        assert "No problems found." in report

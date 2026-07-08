@@ -48,6 +48,37 @@ CATEGORY_LABELS = {
     rubric.CATEGORY_MAINTENANCE: "Maintenance & Provenance",
 }
 
+# One-line plain question each category answers, shown under its heading.
+CATEGORY_QUESTIONS = {
+    rubric.CATEGORY_PERMISSION_SCOPE: "Does it ask for only the access it needs?",
+    rubric.CATEGORY_TOOL_HYGIENE: "Do its tools say what they do and check their inputs?",
+    rubric.CATEGORY_NETWORK_EXPOSURE: "How widely does it share data over the internet?",
+    rubric.CATEGORY_MAINTENANCE: "Who publishes it, and is it kept up to date?",
+}
+
+# Plain problem summary per category, used in the Bottom line when it scores low.
+CATEGORY_PROBLEMS = {
+    rubric.CATEGORY_PERMISSION_SCOPE: "it asks for more access than its tools appear to need",
+    rubric.CATEGORY_TOOL_HYGIENE: "its tools don't clearly say what they do or check the input they receive",
+    rubric.CATEGORY_NETWORK_EXPOSURE: "its internet access is broader than it should be",
+    rubric.CATEGORY_MAINTENANCE: "it shows signs of being unmaintained",
+}
+
+# A category below this is called out as a "biggest problem" in the Bottom
+# line (mirrors the conditions band floor; presentation only, not scoring).
+_LOW_CATEGORY = 60
+
+_BAND_PHRASES = {
+    rubric.VERDICT_APPROVED: "high enough to be approved",
+    rubric.VERDICT_CONDITIONS: (
+        "good, but not good enough for automatic approval — it should only be "
+        "used once the conditions below are addressed"
+    ),
+    rubric.VERDICT_REVIEW: (
+        "too low for approval, so a person should review it before anyone uses it"
+    ),
+}
+
 # Ordered (pattern, template) pairs covering every finding string the engine
 # can emit (scanning/rubric.py). First match wins; a finding matching nothing
 # renders verbatim — never dropped. Order matters only where one pattern is a
@@ -222,14 +253,38 @@ def _conditions(score) -> list[str]:
     return conditions
 
 
+def _bottom_line_scored(result: ScanResult) -> str:
+    score = result.rubric
+    sentences = [
+        f"**Bottom line:** This server scored {round(result.score)} out of 100 "
+        f"on what could be checked — {_BAND_PHRASES[result.verdict]}."
+    ]
+    low = sorted(
+        (c for c in score.categories if not c.unverified and c.score < _LOW_CATEGORY),
+        key=lambda c: c.score,
+    )
+    if low:
+        problems = [CATEGORY_PROBLEMS[c.category] for c in low[:2]]
+        label = "The biggest problem" if len(problems) == 1 else "The biggest problems"
+        sentences.append(f"{label}: {_join_reasons(problems)}.")
+    if any(c.unverified for c in score.categories):
+        sentences.append(
+            "We also could not confirm who publishes or maintains this server, "
+            "so that part is left out of the score."
+        )
+    return " ".join(sentences)
+
+
 def _explain_scored(result: ScanResult) -> str:
     score = result.rubric
     assessed = int(score.assessed_weight)
     lines = [
         f"# Verdict: {result.verdict}",
         "",
-        f"Weighted score: **{result.score:g}/100** "
-        f"(scored on {assessed}/100 assessed rubric weight).",
+        _bottom_line_scored(result),
+        "",
+        f"Score: **{round(result.score)}/100**, based on the {assessed}/100 "
+        "rubric points that could be verified offline.",
         "",
     ]
     if result.verdict == rubric.VERDICT_CONDITIONS:
@@ -244,12 +299,16 @@ def _explain_scored(result: ScanResult) -> str:
         if cat.unverified:
             lines.append(f"## {label}: N/A — not independently verified")
         else:
-            lines.append(f"## {label}: {cat.score:g}/100")
+            lines.append(f"## {label}: {round(cat.score)}/100")
+        question = CATEGORY_QUESTIONS.get(cat.category)
+        if question:
+            lines.append(f"*{question}*")
         lines.append("")
         if cat.findings:
-            lines.extend(f"- {finding}" for finding in cat.findings)
+            for finding in cat.findings:
+                lines.extend(_finding_lines(finding))
         else:
-            lines.append("- No findings.")
+            lines.append("- No problems found.")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
