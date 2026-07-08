@@ -131,6 +131,11 @@ Static analysis has boundaries, and this tool reports them rather than pretendin
   from the hardcoded-credentials gate specifically, which minified code would flood with
   secret-shaped noise. Install trees (`node_modules/`, `.venv/`) are excluded entirely:
   auditing the installed dependency tree is a supply-chain scanner's job, not this tool's.
+- **URLs in comments and config templates are not network calls.** The undisclosed-network gate
+  strips comment text (`#`, `//`, `/* */`) and skips `.env.example`-style templates before URL
+  detection — a signup link in a comment is guidance for a human, not an endpoint the program
+  contacts. Comment stripping is line-based and best-effort; unmarked interior lines of a
+  multi-line block comment can still be flagged (a false positive, never a missed real call).
 - **Regex-based detection can be evaded** by deliberate obfuscation (string splitting, encoding).
   The scanner is a governance gate for honest-but-flawed servers and a tripwire for lazy
   malicious ones; it is not a substitute for sandboxing or runtime egress controls.

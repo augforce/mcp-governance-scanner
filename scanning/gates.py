@@ -46,6 +46,32 @@ _SINKS = [
 ]
 _DYNAMIC_RE = re.compile(r"f[\"']|\+|\.format\(|%\s*[\w(]")
 
+# Comment text is stripped before URL detection in the network gate: a URL in
+# a comment ("# Get a free key at https://...") is guidance for a human, not a
+# call the program makes. Best-effort line-level stripping: full-line and
+# trailing '#'/'//' comments (never the '//' of a URL scheme), inline /*...*/
+# blocks, '/*'-to-end-of-line openers, and '*'-led doc-block continuation
+# lines. Unmarked interior lines of a multi-line /* */ block are the known gap.
+_INLINE_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/")
+_OPEN_BLOCK_COMMENT_RE = re.compile(r"/\*.*$")
+_LINE_COMMENT_RE = re.compile(r"(?:^|(?<=\s))(?:#|//).*$")
+_BLOCK_CONTINUATION_RE = re.compile(r"^\s*\*")
+
+# Config templates are never executed: a URL there is a hint for whoever fills
+# the file in, not an endpoint the server contacts. (Named independently of the
+# providers' sweep list — this is gate semantics, not ingest policy.)
+_TEMPLATE_CONFIG_NAMES = {".env.example", ".env.sample"}
+
+
+def strip_comment_text(line: str) -> str:
+    """Remove comment text from one source line (see the note above)."""
+    if _BLOCK_CONTINUATION_RE.match(line):
+        return ""
+    line = _INLINE_BLOCK_COMMENT_RE.sub(" ", line)
+    line = _OPEN_BLOCK_COMMENT_RE.sub("", line)
+    return _LINE_COMMENT_RE.sub("", line)
+
+
 _URL_RE = re.compile(r"https?://([A-Za-z0-9*.-]+)")
 _BARE_HOST_RE = re.compile(r"^\*$|^[A-Za-z0-9*.-]+\.[A-Za-z]{2,}$")
 # Namespace/spec identifiers, not endpoints anyone contacts. Deliberately
@@ -177,7 +203,9 @@ def check_undisclosed_network_calls(artifact: ServerArtifact) -> list[GateFindin
             disclosed.add(match.group(1).lower())
     findings = []
     for path, lineno, line in _iter_lines(artifact):
-        for match in _URL_RE.finditer(line):
+        if path.rsplit("/", 1)[-1] in _TEMPLATE_CONFIG_NAMES:
+            continue
+        for match in _URL_RE.finditer(strip_comment_text(line)):
             host = match.group(1).lower()
             if not _host_is_disclosed(host, disclosed):
                 findings.append(

@@ -162,6 +162,70 @@ class TestUndisclosedNetworkCalls:
         )
         assert gates.check_undisclosed_network_calls(documented) == []
 
+    def test_url_in_env_example_comment_is_not_a_network_call(self):
+        # Regression: real-world false positive (career-intelligence scan).
+        # A signup URL in an .env.example comment is human-readable guidance,
+        # not an endpoint the program contacts.
+        art = fixtures.artifact_with_source(
+            "# JSEARCH_API_KEY:\n"
+            '#   Get a free key (200 searches/month) at https://rapidapi.com (search "JSearch")\n'
+            "#   or https://www.openwebninja.com/api/jsearch\n"
+            "JSEARCH_API_KEY=\n",
+            ".env.example",
+        )
+        assert gates.check_undisclosed_network_calls(art) == []
+
+    def test_env_example_is_inert_even_outside_comments(self):
+        # Template config is never executed; a URL-shaped value there is a
+        # hint for a human, not a call the server makes.
+        art = fixtures.artifact_with_source(
+            "API_BASE=https://staging.example.net/v2\n", ".env.example"
+        )
+        assert gates.check_undisclosed_network_calls(art) == []
+
+    def test_urls_in_code_comments_are_not_network_calls(self):
+        art = fixtures.artifact_with_source(
+            "# docs: https://py-docs.example.dev/setup\n"
+            "x = 1  # see https://inline.example.dev\n",
+            "notes.py",
+        )
+        art2 = fixtures.artifact_with_source(
+            "// docs: https://js-docs.example.dev/setup\n"
+            "/* block: https://block.example.dev */\n"
+            "/**\n"
+            " * JSDoc: https://jsdoc.example.dev\n"
+            " */\n"
+            "const x = 1; // https://trailing.example.dev\n",
+            "notes.js",
+        )
+        assert gates.check_undisclosed_network_calls(art) == []
+        assert gates.check_undisclosed_network_calls(art2) == []
+
+    def test_real_call_on_a_line_with_a_trailing_comment_still_fires(self):
+        # Stripping the comment must not blind the gate to the actual call.
+        art = fixtures.artifact_with_source(
+            'import requests\n\n'
+            'def sync():\n'
+            '    return requests.get("https://real.example.dev/api")  # docs: https://docs.example.dev\n',
+            "sync.py",
+        )
+        findings = gates.check_undisclosed_network_calls(art)
+        assert len(findings) == 1
+        assert "real.example.dev" in findings[0].explanation
+        # The comment URL produced no finding of its own (the snippet may
+        # still show the full line — that's the cited evidence).
+        assert not any("docs.example.dev" in f.explanation for f in findings)
+
+    def test_url_string_literals_in_code_still_fire(self):
+        # The legitimate case (career-intelligence sources.py): module-level
+        # URL constants for endpoints the code really contacts.
+        art = fixtures.artifact_with_source(
+            'URL = "https://remoteok.example.dev/api"\n', "sources.py"
+        )
+        findings = gates.check_undisclosed_network_calls(art)
+        assert len(findings) == 1
+        assert "remoteok.example.dev" in findings[0].explanation
+
 
 class TestCredentialEcho:
     def test_fires_on_printed_and_logged_credentials(self):

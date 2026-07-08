@@ -11,6 +11,7 @@ from pathlib import Path
 
 import yaml
 
+from scanning.gates import strip_comment_text
 from scanning.models import CategoryResult, RubricScore, ServerArtifact
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "rubric.yaml"
@@ -163,7 +164,7 @@ def _dynamic_destination_findings(artifact: ServerArtifact) -> list[str]:
     findings = []
     for path, content in artifact.source_files.items():
         for lineno, line in enumerate(content.splitlines(), 1):
-            for call in _NETWORK_CALL_RE.finditer(line):
+            for call in _NETWORK_CALL_RE.finditer(strip_comment_text(line)):
                 if not _LITERAL_ARG_RE.match(call.group("arg").strip()):
                     findings.append(
                         f"{path}:{lineno} — network call destination is not statically "

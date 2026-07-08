@@ -180,6 +180,18 @@ class TestDynamicDestinationFlag:
         assert result.score == 100
         assert result.findings == ()
 
+    def test_commented_out_network_call_not_soft_flagged(self):
+        # Same principle as the network gate: a call in a comment is not a
+        # call the program makes, so it needs no manual review.
+        art = fixtures.artifact_with_source(
+            "# resp = requests.post(base + path)\n"
+            "// return await fetch(endpoint);\n",
+            "dead_code.py",
+        )
+        result = rubric.score_network_exposure(art)
+        assert result.score == 100
+        assert result.findings == ()
+
     def test_deduction_applied_once_and_stacks_with_broad_scope(self):
         source = (
             'import os\nimport requests\n\n\ndef a(p):\n'
