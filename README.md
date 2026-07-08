@@ -82,8 +82,77 @@ the folder is actually an MCP server (a manifest file or MCP-server code) and sh
 report or a plain "No MCP server found in this folder" message. Past scans are stored and
 browsable under History.
 
-**CLI:** point it at a directory path directly (optionally with a reviewer-authored intake
-manifest for a third-party server).
+## Example Scan:
+job-match — Approved with Conditions (76/100)
+Source: folder · Scanned: 2026-07-08T15:04:41+00:00
+
+**Verdict: Approved with Conditions**
+
+**Bottom line:** This server scored 76 out of 100 on what could be checked — good, but not good enough for automatic approval — it should only be used once the conditions below are addressed. The biggest problem: its tools don't clearly say what they do or check the input they receive. We also could not confirm who publishes or maintains this server, so that part is left out of the score.
+
+Score: **76/100**, based on the 75/100 rubric points that could be verified offline.
+
+**Conditions**
+
+1. Manually review the runtime-built network call destinations flagged under Network & Data Exposure against the disclosed endpoints.
+2. Independently verify provenance (Maintenance & Provenance) via the opt-in GitHub check or manual review — self-reported manifest claims are never accepted as evidence of legitimacy.
+
+**Permission & Scope: 100/100**
+*Does it ask for only the access it needs?*
+
+- No problems found.
+
+**Tool Definition Hygiene: 40/100**
+*Do its tools say what they do and check their inputs?*
+
+- The tool 'score_posting' doesn't say what input it expects.
+  - Evidence: Tool 'score_posting' declares no input schema.
+  - Suggested fix: Add an inputSchema to the tool listing each parameter and its type.
+- The tool 'score_posting' accepts anything sent to it, with no checks or limits.
+  - Evidence: Tool 'score_posting' has no input constraints or validation.
+  - Suggested fix: Add validation to the schema: mark required fields and set limits (enum, maxLength, minimum/maximum, pattern).
+- The tool 'batch_score' doesn't say what input it expects.
+  - Evidence: Tool 'batch_score' declares no input schema.
+  - Suggested fix: Add an inputSchema to the tool listing each parameter and its type.
+- The tool 'batch_score' accepts anything sent to it, with no checks or limits.
+  - Evidence: Tool 'batch_score' has no input constraints or validation.
+  - Suggested fix: Add validation to the schema: mark required fields and set limits (enum, maxLength, minimum/maximum, pattern).
+
+**Network & Data Exposure: 85/100**
+*How widely does it share data over the internet?*
+
+- At career-intelligence/app/main.py:142, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
+  - Evidence: career-intelligence/app/main.py:142 — network call destination is not statically determinable ('evs = [_ingest(conn, job)[1] for job in MockProvider().fetch()]'); requires manual review against the disclosed endpoints.
+  - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
+- At career-intelligence/app/providers/http.py:22, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
+  - Evidence: career-intelligence/app/providers/http.py:22 — network call destination is not statically determinable ('with urllib.request.urlopen(req, timeout=timeout) as resp:'); requires manual review against the disclosed endpoints.
+  - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
+- At career-intelligence/app/providers/base.py:7, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
+  - Evidence: career-intelligence/app/providers/base.py:7 — network call destination is not statically determinable ('def fetch(self) -> list[NormalizedJob]: ...'); requires manual review against the disclosed endpoints.
+  - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
+- At career-intelligence/app/providers/mock.py:34, the code builds an internet address while running, so we can't confirm where it sends data — a person should check this.
+  - Evidence: career-intelligence/app/providers/mock.py:34 — network call destination is not statically determinable ('def fetch(self) -> list[NormalizedJob]:'); requires manual review against the disclosed endpoints.
+  - Suggested fix: Use a fixed URL where possible; if the destination must be configurable, document the allowed endpoint(s) so a reviewer can check them.
+
+**Maintenance & Provenance: N/A — not independently verified**
+*Who publishes it, and is it kept up to date?*
+
+- It doesn't state its repository at all.
+  - Evidence: Manifest field 'repository' missing — provenance not verified.
+  - Suggested fix: Add the repository field to the manifest so it can be independently verified.
+- It says its author is '{'name': 'augforce'}', but nothing confirms that claim.
+  - Evidence: Manifest field 'author' claimed as '{'name': 'augforce'}' — not independently verified.
+  - Suggested fix: Verify the claim independently — run the opt-in GitHub provenance check (set GITHUB_TOKEN) or review the author by hand.
+- It says its version is '1.0.0', but nothing confirms that claim.
+  - Evidence: Manifest field 'version' claimed as '1.0.0' — not independently verified.
+  - Suggested fix: Verify the claim independently — run the opt-in GitHub provenance check (set GITHUB_TOKEN) or review the version by hand.
+- It doesn't state its license at all.
+  - Evidence: Manifest field 'license' missing — provenance not verified.
+  - Suggested fix: Add the license field to the manifest so it can be independently verified.
+
+## CLI: 
+
+Point it at a directory path directly (optionally with a reviewer-authored intake manifest for a third-party server).
 
 Optional layers (both strictly additive — the deterministic verdict never depends on them):
 
