@@ -56,11 +56,90 @@ class TestHomePage:
         assert "webkitdirectory" in html
         assert "Scan" in html
 
-    def test_has_no_path_textbox_or_upload_form(self, client):
+    def test_has_no_legacy_upload_form(self, client):
         html = client.get("/").text
-        assert 'name="path"' not in html
         assert 'name="manifest_path"' not in html
         assert "/upload" not in html
+
+    def test_offers_local_path_fallback(self, client):
+        html = client.get("/").text
+        assert 'name="local_path"' in html
+        assert "/scan-path" in html
+
+    def test_embeds_bulk_dir_skip_list_for_the_picker(self, client):
+        # The browser must filter dependency/system folders BEFORE upload —
+        # the skip list is injected from the provider so there is one source
+        # of truth with the server-side sweep.
+        html = client.get("/").text
+        for skip in ("node_modules", ".venv", "__pycache__", ".git", "dist", "build"):
+            assert skip in html
+
+
+class TestScanPath:
+    def test_scans_a_corpus_server_by_path(self, client):
+        response = client.post(
+            "/scan-path",
+            data={"local_path": str(CORPUS / "known_bad" / "hardcoded_key")},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert "Fail" in response.text
+
+    def test_nonexistent_path_shows_plain_error(self, client):
+        response = client.post("/scan-path", data={"local_path": "/no/such/folder"})
+        assert response.status_code == 200
+        assert "Not a folder on this machine" in response.text
+        assert "Traceback" not in response.text
+
+    def test_empty_path_shows_plain_error(self, client):
+        response = client.post("/scan-path", data={"local_path": "  "})
+        assert response.status_code == 200
+        assert "Not a folder on this machine" in response.text
+
+    def test_non_mcp_folder_shows_not_found_message(self, client, tmp_path):
+        (tmp_path / "todo.txt").write_text("buy milk")
+        response = client.post("/scan-path", data={"local_path": str(tmp_path)})
+        assert "No MCP server found in this folder" in response.text
+
+    def test_path_scan_persists_to_history(self, client):
+        client.post(
+            "/scan-path",
+            data={"local_path": str(CORPUS / "known_bad" / "hardcoded_key")},
+            follow_redirects=True,
+        )
+        assert "weather-briefing" in client.get("/history").text
+
+
+class TestUploadLimits:
+    def test_more_than_starlette_default_1000_files_accepted(self, client):
+        # Real projects exceed multipart's default max_files=1000 even after
+        # client-side filtering; the raised cap must absorb them.
+        parts = [
+            ("files", ("proj/manifest.json", b'{"name": "big-proj"}', "application/octet-stream")),
+        ]
+        parts += [
+            ("files", (f"proj/mod_{i}.py", b"from mcp import tool\n", "application/octet-stream"))
+            for i in range(1200)
+        ]
+        response = client.post("/scan", files=parts, follow_redirects=True)
+        assert response.status_code == 200
+        assert "big-proj" in response.text
+
+    def test_over_the_file_cap_gets_plain_guidance_not_an_error_page(self, client, monkeypatch):
+        # Exceeding the (raised) multipart file cap must point at the no-limit
+        # local-path fallback, not surface a parser error. The cap is lowered
+        # here so the test doesn't have to build 20k+ multipart parts.
+        import app.main as main
+
+        monkeypatch.setattr(main, "UPLOAD_MAX_FILES", 5)
+        parts = [
+            ("files", (f"proj/f{i}.py", b"x = 1\n", "application/octet-stream"))
+            for i in range(6)
+        ]
+        response = client.post("/scan", files=parts)
+        assert response.status_code == 200
+        assert "local path" in response.text.lower()
+        assert "Traceback" not in response.text
 
 
 class TestScan:

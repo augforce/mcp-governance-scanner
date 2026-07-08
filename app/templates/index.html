@@ -1,27 +1,81 @@
 {% extends "base.html" %}
 {% block content %}
   <h2>Scan an MCP server</h2>
-  <form class="scan" method="post" action="/scan" enctype="multipart/form-data">
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form class="scan" id="folderform" method="post" action="/scan" enctype="multipart/form-data">
     <label class="folder-btn">
       Choose Folder…
       <input type="file" name="files" webkitdirectory directory multiple required
              onchange="showPick(this)">
     </label>
-    <p id="picked" class="picked">No folder chosen yet.</p>
+    <p id="picked" class="picked">No folder chosen yet. Dependency and system folders
+      (.venv, node_modules, .git, caches, …) are excluded automatically before upload.</p>
     <button type="submit" id="scanbtn" disabled>Scan</button>
   </form>
+  <form class="scan" method="post" action="/scan-path">
+    <label for="local_path">Or enter a folder path on this machine — read directly, no upload, no size limit:</label>
+    <input type="text" id="local_path" name="local_path"
+           placeholder="/Users/you/projects/my-mcp-server">
+    <button type="submit">Scan path</button>
+  </form>
   <script>
+    // Mirror of the server-side sweep rules (providers/local_dir.py),
+    // injected so the browser never uploads dependency/system bulk.
+    var SKIP_DIRS = {{ skip_dirs | tojson }};
+    var KEEP_EXTENSIONS = {{ keep_extensions | tojson }};
+    var KEEP_NAMES = {{ keep_names | tojson }};
+    var MAX_FILE_BYTES = {{ max_file_bytes }};
+    var kept = [];
+
+    function keepFile(f) {
+      var parts = (f.webkitRelativePath || f.name).split('/');
+      for (var i = 0; i < parts.length - 1; i++) {
+        if (SKIP_DIRS.indexOf(parts[i]) !== -1) return false;
+        if (parts[i].charAt(0) === '.') return false;
+      }
+      var name = parts[parts.length - 1];
+      if (name.charAt(0) === '.' && KEEP_NAMES.indexOf(name) === -1) return false;
+      var dot = name.lastIndexOf('.');
+      var ext = dot === -1 ? '' : name.slice(dot).toLowerCase();
+      if (KEEP_EXTENSIONS.indexOf(ext) === -1 && KEEP_NAMES.indexOf(name) === -1) return false;
+      return f.size <= MAX_FILE_BYTES;
+    }
+
     function showPick(input) {
       var msg = document.getElementById('picked');
       var btn = document.getElementById('scanbtn');
-      if (input.files.length) {
-        var top = input.files[0].webkitRelativePath.split('/')[0] || 'selected folder';
-        msg.textContent = 'Selected: ' + top + ' (' + input.files.length + ' files)';
-        btn.disabled = false;
-      } else {
+      kept = Array.prototype.filter.call(input.files, keepFile);
+      if (!input.files.length) {
         msg.textContent = 'No folder chosen yet.';
         btn.disabled = true;
+      } else if (!kept.length) {
+        msg.textContent = 'No scannable source files found in that folder.';
+        btn.disabled = true;
+      } else {
+        var top = input.files[0].webkitRelativePath.split('/')[0] || 'selected folder';
+        msg.textContent = 'Selected: ' + top + ' — will upload ' + kept.length + ' of ' +
+          input.files.length + ' files (dependencies, caches, and hidden folders excluded).';
+        btn.disabled = false;
       }
     }
+
+    document.getElementById('folderform').addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      var msg = document.getElementById('picked');
+      var btn = document.getElementById('scanbtn');
+      btn.disabled = true;
+      msg.textContent = 'Uploading ' + kept.length + ' files and scanning…';
+      var fd = new FormData();
+      kept.forEach(function (f) { fd.append('files', f, f.webkitRelativePath || f.name); });
+      try {
+        var resp = await fetch('/scan', { method: 'POST', body: fd });
+        if (resp.redirected) { window.location.href = resp.url; return; }
+        var html = await resp.text();
+        document.open(); document.write(html); document.close();
+      } catch (err) {
+        msg.textContent = 'Upload failed: ' + err;
+        btn.disabled = false;
+      }
+    });
   </script>
 {% endblock %}
